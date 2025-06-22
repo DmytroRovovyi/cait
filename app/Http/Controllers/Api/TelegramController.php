@@ -63,7 +63,8 @@ class TelegramController extends Controller
                     /help - Вивід довідки по командам бота.
                     /list - Cписок задач.
                     /add - Додати нову задачу.
-                    /edit - Редагувати задачу.",
+                    /edit - Редагувати задачу.
+                    /delete - Видалити задачу.",
                 ]);
                 break;
             case ($text === '/list'):
@@ -165,6 +166,30 @@ class TelegramController extends Controller
                     $telegram->sendMessage([
                         'chat_id' => $chatId,
                         'text' => "Задачу #{$userState->task_id} оновлено!",
+                    ]);
+                    break;
+                }
+                break;
+            case ($text === '/delete' || ($userState && in_array($userState->step, ['delete_id']))):
+
+                if ($text === '/delete') {
+                    $userState->step = 'delete_id';
+                    $userState->save();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Вкажіть номер задачі для видалення:",
+                    ]);
+                    break;
+                }
+
+                if ($userState->step === 'delete_id'  && is_numeric($text)) {
+                    $userState->task_id = $text;
+                    $userState->save();
+                    Http::delete(config('app.url')."/api/tasks/{$userState->task_id}");
+                    $userState->delete();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Задачу #{$userState->task_id} видалено!",
                     ]);
                     break;
                 }
