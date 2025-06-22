@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Models\TelegramUser;
 use Illuminate\Support\Facades\Http;
 use Telegram\Bot\Api;
+use App\Models\UserState;
 
 class TelegramController extends Controller
 {
@@ -33,6 +34,11 @@ class TelegramController extends Controller
         $lastName = $message->getFrom()->getLastName();
         $text = $message->getText();
 
+        if (!$text) {
+            return response('ok', 200);
+        }
+        $userState = UserState::firstOrCreate(['telegram_id' => $chatId]);
+
         switch (true) {
             case ($text === '/start'):
                 TelegramUser::updateOrCreate(
@@ -55,7 +61,8 @@ class TelegramController extends Controller
                     'text' => "Доступні команди:
                     /start - Запуск бота та реєстрація користувача.
                     /help - Вивід довідки по командам бота.
-                    /list - список задач",
+                    /list - Cписок задач.
+                    /add - Додати нову задачу.",
                 ]);
                 break;
             case ($text === '/list'):
@@ -77,7 +84,43 @@ class TelegramController extends Controller
                     'text' => $msg,
                 ]);
                 break;
+            case ($text === '/add' || ($userState && in_array($userState->step, ['add_title', 'add_description']))):
 
+                if ($text === '/add') {
+                    $userState->step = 'add_title';
+                    $userState->save();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Введіть заголовок задачі:",
+                    ]);
+                    break;
+                }
+
+                if ($userState->step === 'add_title') {
+                    $userState->title = $text;
+                    $userState->step = 'add_description';
+                    $userState->save();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Введіть опис задачі:",
+                    ]);
+                    break;
+                }
+
+                if ($userState->step === 'add_description') {
+                    Http::post(config('app.url').'/api/tasks',[
+                        'title' => $userState->title,
+                        'description' => $text,
+                        'completed' => false,
+                    ]);
+                    $userState->delete();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Задачу створено!",
+                    ]);
+                    break;
+                }
+                break;
             default:
                 $telegram->sendMessage([
                     'chat_id' => $chatId,
