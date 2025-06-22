@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\TelegramUser;
+use Illuminate\Support\Facades\Http;
 use Telegram\Bot\Api;
 
 class TelegramController extends Controller
@@ -32,25 +33,56 @@ class TelegramController extends Controller
         $lastName = $message->getFrom()->getLastName();
         $text = $message->getText();
 
-        if ($text === '/start') {
-            TelegramUser::updateOrCreate(
-                ['telegram_id' => $chatId],
-                [
-                    'username' => $username,
-                    'first_name' => $firstName,
-                    'last_name' => $lastName,
-                ]
-            );
-            $name = $firstName ?: $username ?: 'користувач';
-            $telegram->sendMessage([
-                'chat_id' => $chatId,
-                'text' => "Вітаю, {$name}! Ви зареєстровані.",
-            ]);
-        } elseif ($text === '/help') {
-            $telegram->sendMessage([
-                'chat_id' => $chatId,
-                'text' => "Доступні команди:\n\n/start - Запуск бота та реєстрація користувача.\n/help - Вивід довідки по командам бота.",
-            ]);
+        switch (true) {
+            case ($text === '/start'):
+                TelegramUser::updateOrCreate(
+                    ['telegram_id' => $chatId],
+                    [
+                        'username' => $username,
+                        'first_name' => $firstName,
+                        'last_name' => $lastName,
+                    ]
+                );
+                $name = $firstName ?: $username ?: 'користувач';
+                $telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => "Вітаю, {$name}! Ви зареєстровані.",
+                ]);
+                break;
+            case ($text === '/help'):
+                $telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => "Доступні команди:
+                    /start - Запуск бота та реєстрація користувача.
+                    /help - Вивід довідки по командам бота.
+                    /list - список задач",
+                ]);
+                break;
+            case ($text === '/list'):
+                $response = Http::get(config('app.url') . '/api/tasks');
+                $tasks = $response->json();
+                if (empty($tasks)) {
+                    $msg = "У вас немає задач.";
+                } else {
+                    $msg = "Ваші задачі:\n";
+                    foreach ($tasks as $task) {
+                        $msg .= "-------------------------\n";
+                        $msg .= "{$task['id']}: {$task['title']}\n";
+                        $msg .= "Опис: {$task['description']}\n";
+                        $msg .= "Статус: [" . ($task['completed'] ? 'done' : 'not done') . "]\n\n";
+                    }
+                }
+                $telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $msg,
+                ]);
+                break;
+
+            default:
+                $telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => "Невідома команда. Введіть /help для списку команд.",
+                    ]);
         }
 
         return response('ok', 200);
