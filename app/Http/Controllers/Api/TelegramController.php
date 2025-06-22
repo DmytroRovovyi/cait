@@ -62,7 +62,8 @@ class TelegramController extends Controller
                     /start - Запуск бота та реєстрація користувача.
                     /help - Вивід довідки по командам бота.
                     /list - Cписок задач.
-                    /add - Додати нову задачу.",
+                    /add - Додати нову задачу.
+                    /edit - Редагувати задачу.",
                 ]);
                 break;
             case ($text === '/list'):
@@ -117,6 +118,53 @@ class TelegramController extends Controller
                     $telegram->sendMessage([
                         'chat_id' => $chatId,
                         'text' => "Задачу створено!",
+                    ]);
+                    break;
+                }
+                break;
+            case ($text === '/edit' || ($userState && in_array($userState->step, ['edit_id', 'edit_title', 'edit_description']))):
+
+                if ($text === '/edit') {
+                    $userState->step = 'edit_id';
+                    $userState->save();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Вкажіть номер задачі для редагування:",
+                    ]);
+                    break;
+                }
+
+                if ($userState->step === 'edit_id' && is_numeric($text)) {
+                    $userState->task_id = $text;
+                    $userState->step = 'edit_title';
+                    $userState->save();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Введіть новий заголовок для задачі #{$text}:",
+                    ]);
+                    break;
+                }
+
+                if ($userState->step === 'edit_title' && $userState->task_id) {
+                    $userState->title = $text;
+                    $userState->step = 'edit_description';
+                    $userState->save();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Введіть новий опис для задачі #{$userState->task_id}:",
+                    ]);
+                    break;
+                }
+
+                if ($userState->step === 'edit_description' && $userState->task_id) {
+                    Http::put(config('app.url')."/api/tasks/{$userState->task_id}", [
+                        'title' => $userState->title,
+                        'description' => $text,
+                    ]);
+                    $userState->delete();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Задачу #{$userState->task_id} оновлено!",
                     ]);
                     break;
                 }

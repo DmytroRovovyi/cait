@@ -19,5 +19,6 @@ class UserState extends Model
         'step',
         'title',
         'description',
+        'task_id',
     ];
 }
