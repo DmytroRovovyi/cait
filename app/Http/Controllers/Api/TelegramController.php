@@ -123,7 +123,7 @@ class TelegramController extends Controller
                     break;
                 }
                 break;
-            case ($text === '/edit' || ($userState && in_array($userState->step, ['edit_id', 'edit_title', 'edit_description']))):
+            case ($text === '/edit' || ($userState && in_array($userState->step, ['edit_id', 'edit_title', 'edit_description', 'edit_completed']))):
 
                 if ($text === '/edit') {
                     $userState->step = 'edit_id';
@@ -158,9 +158,22 @@ class TelegramController extends Controller
                 }
 
                 if ($userState->step === 'edit_description' && $userState->task_id) {
+                    $userState->description = $text;
+                    $userState->step = 'edit_completed';
+                    $userState->save();
+                    $telegram->sendMessage([
+                        'chat_id' => $chatId,
+                        'text' => "Вкажіть статус задачі #{$userState->task_id} (напишіть 'done' або 'not done'):",
+                    ]);
+                    break;
+                }
+
+                if ($userState->step === 'edit_completed' && $userState->task_id) {
+                    $completed = strtolower(trim($text)) === 'done' ? true : false;
                     Http::put(config('app.url')."/api/tasks/{$userState->task_id}", [
                         'title' => $userState->title,
-                        'description' => $text,
+                        'description' => $userState->description,
+                        'completed' => $completed,
                     ]);
                     $userState->delete();
                     $telegram->sendMessage([
